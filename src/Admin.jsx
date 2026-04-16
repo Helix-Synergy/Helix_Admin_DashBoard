@@ -271,6 +271,7 @@ const ViewModal = ({ item, type, onClose }) => {
 const NAV_ITEMS = [
   { key: "conferences", label: "Helix Conferences", icon: <CalendarDays size={18} /> },
   { key: "subdomains", label: "Subdomains", icon: <Network size={18} /> },
+  { key: "abstracts", label: "Helix Abstract Details", icon: <FileText size={18} /> },
 ];
 
 const Dashboard = ({ onLogout }) => {
@@ -468,6 +469,10 @@ const Dashboard = ({ onLogout }) => {
 
             {isHelixSubMenu && activeNav === "contacts" && (
               <ContactDetailsView key="contacts" />
+            )}
+
+            {!isHelixSubMenu && activeNav === "abstracts" && (
+              <HelixAbstractDetailsView key="abstracts" />
             )}
 
             {!isHelixSubMenu && activeNav === "conferences" && !selectedConference && (
@@ -1212,5 +1217,300 @@ const ContactDetailsView = () => {
   );
 };
 
+
+/* ================= HELIX ABSTRACT DETAILS VIEW ================= */
+
+/* ================= HELIX ABSTRACT DETAILS VIEW ================= */
+
+const HelixAbstractDetailsView = () => {
+  const [abstracts, setAbstracts] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [search, setSearch] = useState("");
+  const [selectedAbstract, setSelectedAbstract] = useState(null);
+
+  const getFileUrl = (path) => {
+    if (!path) return null;
+    
+    // Handle case where path might be an object (e.g. from Cloudinary)
+    const strPath = typeof path === 'string' ? path : (path.url || path.secure_url);
+    
+    if (!strPath || typeof strPath !== 'string') return null;
+
+    if (strPath.startsWith("http")) return strPath;
+    // Normalize backslashes (Windows) to forward slashes (URL)
+    const normalizedPath = strPath.replace(/\\/g, "/");
+    // This assumes the backend serves files from the root or the path already includes 'uploads/'
+    return `/${normalizedPath}`;
+  };
+
+  const fetchAbstracts = useCallback(() => {
+    setLoading(true);
+    axios
+      .get("https://helix-abstract-form-backend-1.onrender.com/api/forms/all")
+      .then((res) => {
+        const data = Array.isArray(res.data) ? res.data : (res.data.data || []);
+        setAbstracts(data);
+      })
+      .catch((err) => {
+        console.error("Abstract API Error:", err);
+        setAbstracts([]);
+      })
+      .finally(() => setLoading(false));
+  }, []);
+
+  useEffect(() => {
+    fetchAbstracts();
+  }, [fetchAbstracts]);
+
+  const filteredAbstracts = abstracts.filter((a) => {
+    const q = search.toLowerCase();
+    return (
+      `${a.firstName} ${a.lastName}`.toLowerCase().includes(q) ||
+      a.affiliation?.toLowerCase().includes(q) ||
+      a.university?.toLowerCase().includes(q) ||
+      a.country?.toLowerCase().includes(q) ||
+      a.tracks?.toLowerCase().includes(q)
+    );
+  });
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: -20 }}
+      className="space-y-6"
+    >
+      {/* Header & Search */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-2xl md:text-3xl font-bold text-white">
+            Helix Abstract Submissions
+            <span className="ml-3 text-sm font-medium text-emerald-300/70">
+              ({filteredAbstracts.length} Total)
+            </span>
+          </h1>
+          <p className="text-emerald-300/60 text-sm mt-1">
+            Review and manage scientific abstract submissions
+          </p>
+        </div>
+        <div className="flex items-center space-x-3">
+          <div className="relative flex-1 md:w-64">
+            <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-white/30" />
+            <input
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search abstracts…"
+              className="w-full pl-9 pr-4 py-2.5 bg-white/5 border border-white/10 rounded-xl text-sm text-white placeholder-white/25 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500/30 transition-all"
+            />
+          </div>
+          <motion.button
+            whileHover={{ scale: 1.06 }}
+            whileTap={{ scale: 0.93 }}
+            onClick={fetchAbstracts}
+            disabled={loading}
+            className="flex items-center space-x-1.5 px-4 py-2.5 bg-white/5 border border-white/10 rounded-xl text-white/50 hover:text-emerald-300 text-sm transition-all"
+          >
+            <RefreshCw size={14} className={loading ? "animate-spin" : ""} />
+            <span className="hidden sm:inline">Refresh</span>
+          </motion.button>
+        </div>
+      </div>
+
+      {loading ? (
+        <div className="flex items-center justify-center py-20">
+          <RefreshCw size={24} className="text-emerald-500 animate-spin" />
+        </div>
+      ) : filteredAbstracts.length === 0 ? (
+        <div className="text-center py-20 bg-white/5 rounded-2xl border border-white/10">
+          <FileText size={40} className="mx-auto text-white/10 mb-3" />
+          <p className="text-white/30">No abstract submissions found</p>
+        </div>
+      ) : (
+        <div className="overflow-x-auto bg-white/5 border border-white/10 rounded-2xl">
+          <table className="min-w-full text-sm text-left text-white">
+            <thead className="bg-white/5 text-xs uppercase tracking-wider text-emerald-300/70">
+              <tr>
+                <th className="px-4 py-3">Sl.No</th>
+                <th className="px-4 py-3">Name</th>
+                <th className="px-4 py-3">Affiliation</th>
+                <th className="px-4 py-3">University</th>
+                <th className="px-4 py-3">Country</th>
+                <th className="px-4 py-3">Track</th>
+                <th className="px-4 py-3 text-center">Files</th>
+                <th className="px-4 py-3 text-center">Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredAbstracts.map((abstract, i) => (
+                <tr
+                  key={abstract._id || i}
+                  className="border-t border-white/10 hover:bg-white/5 transition"
+                >
+                  <td className="px-4 py-3 text-white/40">{i + 1}</td>
+                  <td className="px-4 py-3 font-medium">
+                    {abstract.firstName} {abstract.lastName}
+                  </td>
+                  <td className="px-4 py-3 text-white/70">{abstract.affiliation || "—"}</td>
+                  <td className="px-4 py-3 text-white/60">{abstract.university || "—"}</td>
+                  <td className="px-4 py-3 text-emerald-300/80">{abstract.country || "—"}</td>
+                  <td className="px-4 py-3 text-white/60 max-w-xs truncate">{abstract.tracks || "—"}</td>
+                  <td className="px-4 py-3 text-center">
+                    <div className="flex items-center justify-center space-x-2">
+                       {abstract.abstract && (
+                        <a href={getFileUrl(abstract.abstract)} target="_blank" rel="noopener noreferrer" title="View Abstract" className="text-emerald-400 hover:text-emerald-300 transition">
+                          <FileText size={16} />
+                        </a>
+                      )}
+                      {abstract.biography && (
+                        <a href={getFileUrl(abstract.biography)} target="_blank" rel="noopener noreferrer" title="View Bio" className="text-blue-400 hover:text-blue-300 transition">
+                          <User size={16} />
+                        </a>
+                      )}
+                    </div>
+                  </td>
+                  <td className="px-4 py-3 text-center">
+                    <button
+                      onClick={() => setSelectedAbstract(abstract)}
+                      className="px-3 py-1.5 rounded-lg bg-emerald-500/10 text-emerald-300 hover:bg-emerald-500/20 transition text-xs"
+                    >
+                      View
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {selectedAbstract && (
+        <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4" onClick={() => setSelectedAbstract(null)}>
+          <motion.div
+            initial={{ scale: 0.9, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            className="bg-[#0b0f1a] max-w-lg w-full rounded-2xl border border-white/10 p-6 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex justify-between items-start mb-6">
+              <div className="flex items-center space-x-2">
+                <div className="w-8 h-8 rounded-lg bg-emerald-500/20 flex items-center justify-center">
+                  <FileText size={18} className="text-emerald-400" />
+                </div>
+                <h2 className="text-lg font-bold text-white tracking-tight">Submission Details</h2>
+              </div>
+              <button onClick={() => setSelectedAbstract(null)} className="text-white/40 hover:text-white transition-colors">
+                <X size={20} />
+              </button>
+            </div>
+
+            <div className="space-y-6 text-sm max-h-[75vh] overflow-y-auto pr-2 custom-scrollbar">
+              
+              <div className="flex flex-col items-center">
+                {selectedAbstract.photo ? (
+                  <div className="flex flex-col items-center space-y-4">
+                    <div className="relative">
+                      <img
+                        src={getFileUrl(selectedAbstract.photo)}
+                        alt="Profile"
+                        className="w-28 h-28 rounded-3xl object-cover border-2 border-emerald-500/30 shadow-2xl shadow-emerald-500/20"
+                      />
+                    </div>
+                    <a
+                      href={getFileUrl(selectedAbstract.photo)}
+                      download
+                      className="flex items-center space-x-2 px-5 py-2.5 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 rounded-xl text-[10px] font-black transition-all border border-emerald-500/20 tracking-[0.2em] uppercase italic"
+                    >
+                      <Download size={12} />
+                      <span>Download Pic</span>
+                    </a>
+                  </div>
+                ) : (
+                  <div className="w-28 h-28 rounded-3xl bg-white/5 flex items-center justify-center border border-white/10">
+                    <User size={40} className="text-white/10" />
+                  </div>
+                )}
+                
+                <div className="text-center mt-4">
+                  <h3 className="text-white font-bold text-2xl leading-tight">
+                    {selectedAbstract.firstName} {selectedAbstract.lastName}
+                  </h3>
+                  <div className="flex items-center justify-center space-x-2 mt-1">
+                    <MapPin size={12} className="text-emerald-500" />
+                    <span className="text-emerald-400 text-xs font-bold uppercase tracking-widest">{selectedAbstract.country || "International"}</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 px-2">
+                <div className="bg-white/5 p-4 rounded-2xl border border-white/10">
+                  <p className="text-white/40 text-[10px] uppercase font-bold tracking-widest mb-1">Affiliation</p>
+                  <p className="text-white font-medium">{selectedAbstract.affiliation || "—"}</p>
+                </div>
+                <div className="bg-white/5 p-4 rounded-2xl border border-white/10">
+                  <p className="text-white/40 text-[10px] uppercase font-bold tracking-widest mb-1">University</p>
+                  <p className="text-white font-medium">{selectedAbstract.university || "—"}</p>
+                </div>
+              </div>
+
+              <div className="px-2">
+                <div className="bg-emerald-500/5 p-4 rounded-2xl border border-emerald-500/10">
+                  <p className="text-emerald-400/50 text-[10px] uppercase font-bold tracking-widest mb-1">Selected Track</p>
+                  <p className="text-emerald-100 font-semibold italic">"{selectedAbstract.tracks || "General Session"}"</p>
+                </div>
+              </div>
+
+              <div className="space-y-3 px-2 pt-2">
+                {selectedAbstract.abstract ? (
+                  <motion.a
+                    whileHover={{ scale: 1.01 }}
+                    whileTap={{ scale: 0.99 }}
+                    href={getFileUrl(selectedAbstract.abstract)}
+                    download
+                    className="flex items-center justify-between w-full px-6 py-5 bg-gradient-to-r from-emerald-600/20 to-teal-600/20 hover:from-emerald-600/30 hover:to-teal-600/30 text-emerald-300 rounded-2xl border border-emerald-500/30 transition-all group shadow-lg shadow-emerald-500/5"
+                  >
+                    <div className="flex items-center space-x-4">
+                      <div className="w-10 h-10 rounded-xl bg-emerald-500/20 flex items-center justify-center">
+                        <FileText size={20} className="text-emerald-400" />
+                      </div>
+                      <span className="font-black text-xs tracking-tighter uppercase italic">Download Abstract PDF</span>
+                    </div>
+                    <Download size={18} className="group-hover:translate-y-0.5 transition-transform" />
+                  </motion.a>
+                ) : (
+                  <div className="flex items-center px-6 py-5 bg-white/5 text-white/20 rounded-2xl border border-white/5 opacity-40 italic text-xs">
+                    No Abstract PDF uploaded
+                  </div>
+                )}
+
+                {selectedAbstract.biography ? (
+                  <motion.a
+                    whileHover={{ scale: 1.01 }}
+                    whileTap={{ scale: 0.99 }}
+                    href={getFileUrl(selectedAbstract.biography)}
+                    download
+                    className="flex items-center justify-between w-full px-6 py-5 bg-gradient-to-r from-blue-600/20 to-indigo-600/20 hover:from-blue-600/30 hover:to-indigo-600/30 text-blue-300 rounded-2xl border border-blue-500/30 transition-all group shadow-lg shadow-blue-500/5"
+                  >
+                    <div className="flex items-center space-x-4">
+                      <div className="w-10 h-10 rounded-xl bg-blue-500/20 flex items-center justify-center">
+                        <User size={20} className="text-blue-400" />
+                      </div>
+                      <span className="font-black text-xs tracking-tighter uppercase italic">Download Bio PDF</span>
+                    </div>
+                    <Download size={18} className="group-hover:translate-y-0.5 transition-transform" />
+                  </motion.a>
+                ) : (
+                  <div className="flex items-center px-6 py-5 bg-white/5 text-white/20 rounded-2xl border border-white/5 opacity-40 italic text-xs">
+                    No Biography PDF uploaded
+                  </div>
+                )}
+              </div>
+            </div>
+          </motion.div>
+        </div>
+      )}
+    </motion.div>
+  );
+};
 export default Admin;
 
